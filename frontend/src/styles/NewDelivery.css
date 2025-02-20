@@ -1,0 +1,22 @@
+.new-delivery {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px;
+}
+
+.upload-section {
+    margin: 20px;
+}
+
+.cropper-container {
+    position: relative;
+    width: 100%;
+    height: 400px;
+    background: #333;
+}
+
+input[type="file"] {
+    display: block;
+    margin: 20px auto;
+}

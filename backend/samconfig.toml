@@ -1,0 +1,35 @@
+version = 0.1
+
+[default.global.parameters]
+stack_name = "IMS"
+region = "eu-west-2"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = ["CAPABILITY_IAM", "CAPABILITY_NAMED_IAM"]
+confirm_changeset = false
+resolve_s3 = true
+s3_prefix = "IMS"
+disable_rollback = true
+image_repositories = [ ]
+
+[default.package.parameters]
+resolve_s3 = true
+
+[default.sync.parameters]
+watch = true
+template_file = "/Users/moses/Documents/goldsmiths/year 3/final-year-project/final-project/res-inventory/backend/template.yaml"
+s3_bucket = "dallas-ims-invoices"
+dependency_layer = false
+
+[default.local_start_api.parameters]
+warm_containers = "EAGER"
+
+[default.local_start_lambda.parameters]
+warm_containers = "EAGER"

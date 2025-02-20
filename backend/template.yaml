@@ -1,0 +1,133 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Globals:
+  Api:
+    Cors:
+      AllowMethods: '''POST,GET,OPTIONS'''
+      AllowHeaders: '''Content-Type'''
+      AllowOrigin: '''*'''
+
+Resources:
+  InvoiceBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: dallas-ims-invoices
+
+  InvoicesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: InvoicesTable
+      AttributeDefinitions:
+        - AttributeName: InvoiceID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: InvoiceID
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  LambdasApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: LambdasApi
+      StageName: Prod
+
+  UploadInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/invoiceToS3
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref InvoiceBucket
+          TABLE_NAME: !Ref InvoicesTable
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref InvoiceBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesTable
+      Events:
+        UploadInvoice:
+          Type: Api
+          Properties:
+            RestApiId: !Ref LambdasApi
+            Path: /upload-invoice
+            Method: POST
+      MemorySize: 3008
+      Timeout: 30
+
+  TextractInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambdas/textractInvoice
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Environment:
+        Variables:
+          BUCKET_NAME: dallas-ims-invoices
+          TABLE_NAME: !Ref InvoicesTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:GetObjectTagging
+              Resource: arn:aws:s3:::dallas-ims-invoices/*
+            - Effect: Allow
+              Action:
+                - textract:AnalyzeDocument
+                - textract:DetectDocumentText
+                - textract:AnalyzeExpense # Add this permission
+              Resource: '*'
+      Events:
+        S3Event:
+          Type: S3
+          Properties:
+            Bucket: !Ref InvoiceBucket
+            Events: s3:ObjectCreated:Put
+      MemorySize: 3008
+      Timeout: 60
+
+
+  InvoiceToInventoryItems:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs22.x
+      CodeUri: lambdas/invoiceToInventory
+      MemorySize: 128
+      Timeout: 15
+      Environment:
+        Variables:
+          HUGGINGFACE_API_KEY: "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"
+          TABLE_NAME: !Ref InvoicesTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesTable
+        - AWSLambdaBasicExecutionRole
+      Events:
+        TextractProcessedEvent:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt InvoicesTable.StreamArn
+            BatchSize: 1
+            StartingPosition: LATEST
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway URL
+    Value: !Sub https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/upload-invoice
+
+  InvoiceBucketName:
+    Description: Name of the S3 bucket storing invoice images.
+    Value: !Ref InvoiceBucket
+
+  DynamoDBTableName:
+    Description: Name of the DynamoDB table storing invoice metadata.
+    Value: !Ref InvoicesTable
