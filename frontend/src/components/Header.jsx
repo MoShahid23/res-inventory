@@ -1,5 +1,6 @@
 import "../styles/Header.css";
 import { useNavigate } from "react-router-dom";
+import Sidebar from "./Sidebar";
 
 function Header({ currentDate }) {
     const navigate = useNavigate();
@@ -7,14 +8,14 @@ function Header({ currentDate }) {
     return (
         <header className="App-header">
             <div className="header-left">
-                <button className="hamburger-menu">☰</button>
-                <h1 onClick={() => navigate("/")}>IMS</h1>
+                <Sidebar />
+                <h1 onClick={() => navigate("/")}>IMS</h1>{" "}
+                {/* return to home */}
             </div>
             <div className="header-right">
-                <p>{currentDate}</p>
+                <p>{currentDate}</p> {/* live timestamp */}
             </div>
         </header>
     );
 }
-
 export default Header;

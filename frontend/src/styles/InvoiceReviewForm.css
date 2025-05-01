@@ -1,0 +1,143 @@
+/* Full-width table with minimal styling */
+.invoice-review-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 1.5rem; /* Large text for easy readability */
+    border: 2px solid white;
+    table-layout: fixed; /* Ensure fixed column widths */
+}
+
+/* Table header */
+.invoice-review-table th {
+    color: black;
+    padding: 15px;
+    text-align: center;
+    font-weight: bold;
+    background: white;
+}
+
+/* Table rows */
+.invoice-review-table td {
+    padding: 15px;
+    text-align: center;
+}
+
+/* Set the left column width to 70% and right column to 30% */
+.invoice-review-table td:nth-child(1), .invoice-review-table th:nth-child(1) {
+    width: 65%;
+}
+
+.invoice-review-table td:nth-child(2), .invoice-review-table th:nth-child(2) {
+    width: 35%;
+}
+
+/* Alternating row color for clarity
+.invoice-review-table tr:nth-child(even) {
+    background: #f9f9f9;
+} */
+
+/* Larger, black-and-white dropdown for item selection */
+.invoice-dropdown{
+    color: black;
+}
+
+/* Quantity control container */
+.quantity-control {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    justify-self: center;
+    max-width: 100%;
+}
+
+/* Large, high-contrast buttons */
+.quantity-control button {
+    display: inline-block;
+    flex: 1;
+    background-color: white;
+    color: black;
+    border: none;
+    padding: 10px 0px;
+    cursor: pointer;
+    font-size: 2rem;
+    text-align: center;
+}
+
+.quantity-control button:hover {
+    background-color: #333;
+}
+
+/* Number input (large and full-width) */
+.quantity-control input {
+    display: inline-block;
+    flex: 1.5;
+    font-size: 2rem;
+    text-align: center;
+    border: 2px solid black;
+    background: white;
+    color: black;
+    padding: 10px;
+    min-width: 0px;
+    border-radius: 5px;
+    -webkit-border-radius: 5px;
+    -moz-border-radius: 5px;
+    -ms-border-radius: 5px;
+    -o-border-radius: 5px;
+}
+
+/* Submit button (Large and full width) */
+.invoice-submit-button {
+    margin-top: 20px;
+    padding: 20px;
+    font-size: 2rem;
+    border: none;
+    background-color: black;
+    color: white;
+    cursor: pointer;
+    text-align: center;
+}
+
+.invoice-submit-button:hover {
+    background-color: #333;
+}
+
+/* --- Stock Take Specific Overrides --- */
+.stocktake-product-cell {
+    width: 40%;
+}
+
+.stocktake-expected-cell {
+    width: 30%;
+}
+
+.stocktake-actual-cell {
+    width: 30%;
+}
+
+/* Optional: visually distinguish expected stock input */
+.stocktake-expected-cell{
+    padding: 0px;
+}
+.stocktake-expected-cell input {
+    justify-self: start;
+    flex: 1;
+    background-color: white;
+    color: black;
+    font-size: 1.6rem;
+    border-radius: 6px;
+    padding: 10px;
+    width: 100%;
+    text-align: center;
+    margin: -10px;
+}
+
+.stock-take-form th:nth-child(1){
+    width: 60%;
+}
+.stock-take-form th:nth-child(2){
+    width: 10%;
+}
+.stock-take-form th:nth-child(3){
+    width: 30%;
+}

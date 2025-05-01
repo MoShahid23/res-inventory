@@ -6,6 +6,11 @@
     background-color: #FFFFFF;
     color: black;
     padding: 10px 20px;
+    border-radius: 0px 0px 15px 15px;
+    -webkit-border-radius: 0px 0px 15px 15px;
+    -moz-border-radius: 0px 0px 15px 15px;
+    -ms-border-radius: 0px 0px 15px 15px;
+    -o-border-radius: 0px 0px 15px 15px;
 }
 
 .header-left {
@@ -15,19 +20,9 @@
 .header-left h1 {
     margin-left: 10px;
     font-size: 4em;
-}
-
-.hamburger-menu {
-    width: fit-content;
-    background: none;
-    border: none;
-    color: black;
-    font-size: 4em;
-    padding: 0px;
-    padding-right: 20px;
-    cursor: pointer;
+    z-index: 1000;
 }
 
 .header-right {
-    font-size: 2em;
+    font-size:x-large;
 }

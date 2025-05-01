@@ -3,6 +3,11 @@ const { v4: uuidv4 } = require("uuid");
 
 const s3 = new AWS.S3();
 const dynamodb = new AWS.DynamoDB.DocumentClient();
+const lambda = new AWS.Lambda();
+
+const BUCKET_NAME = process.env.BUCKET_NAME;
+const TABLE_NAME = process.env.TABLE_NAME;
+const PROCESSOR_LAMBDA_NAME = process.env.PROCESSOR_LAMBDA_NAME;
 
 const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -11,58 +16,68 @@ const corsHeaders = {
 };
 
 exports.handler = async (event) => {
+    if (event.httpMethod === "OPTIONS") {
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({ message: "CORS Preflight OK" }),
+        };
+    }
+
     try {
-        const bucketName = process.env.BUCKET_NAME;
-        const tableName = process.env.TABLE_NAME;
-
-        console.log(`Bucket: ${bucketName}, Table: ${tableName}`);
-
-        // Parse the uploaded file
         const body = JSON.parse(event.body);
         if (!body.image || typeof body.image !== "string") {
-            return {
-                statusCode: 400,
-                headers: corsHeaders,
-                body: JSON.stringify({
-                    message: "Invalid request. 'image' is required and must be a Base64 string.",
-                }),
-            };
+            return errorResponse(
+                400,
+                "Invalid request. 'image' must be a Base64 string."
+            );
         }
 
         const base64Image = body.image;
         const fileName = `${uuidv4()}.jpg`;
         const invoiceID = uuidv4();
-
-        // Decode the Base64 image
         const buffer = Buffer.from(base64Image, "base64");
+
+        if (buffer.length > 5 * 1024 * 1024) {
+            return errorResponse(400, "File is too large. Max size: 5MB.");
+        }
+
         const s3Key = `invoices/${fileName}`;
 
-        // Upload the image to S3
-        console.log(`Uploading to S3: ${s3Key}`);
+        // store file in s3
         await s3
             .putObject({
-                Bucket: bucketName,
+                Bucket: BUCKET_NAME,
                 Key: s3Key,
                 Body: buffer,
                 ContentType: "image/jpeg",
             })
             .promise();
 
-        // Store metadata in DynamoDB
-        const timestamp = new Date().toISOString();
-        console.log(`Storing in DynamoDB with InvoiceID: ${invoiceID}`);
+        // create entry in dynamodb
         await dynamodb
-        .put({
-            TableName: tableName,
-            Item: {
-                InvoiceID: invoiceID,  // Primary Key
-                FileName: fileName,    // File Name
-                S3Key: s3Key,          // S3 Key
-                ProcessingStatus: "1", // Status
-                Timestamp: timestamp,  // Timestamp
-            },
-        })
-        .promise();
+            .put({
+                TableName: TABLE_NAME,
+                Item: {
+                    InvoiceID: invoiceID,
+                    FileName: fileName,
+                    S3Key: s3Key,
+                    ProcessingStatus: 0,
+                    RawTextractData: null,
+                    MatchedData: null,
+                    Timestamp: new Date().toISOString(),
+                },
+            })
+            .promise();
+
+        // trigger processor lambda asynchronously
+        await lambda
+            .invoke({
+                FunctionName: PROCESSOR_LAMBDA_NAME,
+                InvocationType: "Event",
+                Payload: JSON.stringify({ InvoiceID: invoiceID, S3Key: s3Key }),
+            })
+            .promise();
 
         return {
             statusCode: 200,
@@ -73,14 +88,18 @@ exports.handler = async (event) => {
             }),
         };
     } catch (error) {
-        console.error("Error during operation:", error);
-        return {
-            statusCode: 500,
-            headers: corsHeaders,
-            body: JSON.stringify({
-                message: "Error uploading invoice.",
-                error: error.message,
-            }),
-        };
+        return errorResponse(500, "Error uploading invoice.", error);
     }
 };
+
+// return standardized error response
+function errorResponse(statusCode, message, error = null) {
+    return {
+        statusCode,
+        headers: corsHeaders,
+        body: JSON.stringify({
+            message,
+            error: error ? error.message : null,
+        }),
+    };
+}

@@ -4,9 +4,9 @@ Transform: AWS::Serverless-2016-10-31
 Globals:
   Api:
     Cors:
-      AllowMethods: '''POST,GET,OPTIONS'''
-      AllowHeaders: '''Content-Type'''
-      AllowOrigin: '''*'''
+      AllowMethods: "'OPTIONS,POST,GET'"
+      AllowHeaders: "'Content-Type,Authorization'"
+      AllowOrigin: "'*'"
 
 Resources:
   InvoiceBucket:
@@ -28,106 +28,300 @@ Resources:
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
 
+  MasterProductsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: MasterProducts
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: N
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+
   LambdasApi:
     Type: AWS::Serverless::Api
     Properties:
       Name: LambdasApi
       StageName: Prod
+      Auth:
+        DefaultAuthorizer: CognitoAuth
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuth:
+            UserPoolArn: arn:aws:cognito-idp:eu-west-2:253490763763:userpool/eu-west-2_cj9sj96k1
 
-  UploadInvoiceFunction:
+  InvoiceProcessorFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: lambdas/invoiceToS3
       Handler: index.handler
       Runtime: nodejs22.x
+      CodeUri: lambdas/invoiceProcessor
+      MemorySize: 128
+      Timeout: 60
       Environment:
         Variables:
           BUCKET_NAME: !Ref InvoiceBucket
           TABLE_NAME: !Ref InvoicesTable
+          SECRET_NAME: "openai-api-key-test"
+          MASTER_PRODUCTS_TABLE: !Ref MasterProductsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref InvoicesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MasterProductsTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:openai-api-key-test*
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+                - s3:GetObject
+                - s3:GetObjectTagging
+              Resource:
+                - !Sub arn:aws:s3:::${InvoiceBucket}
+                - !Sub arn:aws:s3:::${InvoiceBucket}/*
+            - Effect: Allow
+              Action:
+                - textract:AnalyzeDocument
+                - textract:DetectDocumentText
+                - textract:AnalyzeExpense
+              Resource: '*'
+
+  InvoiceProcessingPoller:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs22.x
+      CodeUri: lambdas/invoiceProcessingPoller
+      MemorySize: 128
+      Timeout: 5
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref InvoicesTable
+          MASTER_PRODUCTS_TABLE: !Ref MasterProductsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref InvoicesTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref MasterProductsTable
+      Events:
+        GetStatus:
+          Type: Api
+          Properties:
+            Path: /invoice-processor-polling
+            Method: GET
+            RestApiId: !Ref LambdasApi
+            Auth:
+              Authorizer: CognitoAuth
+
+  UploadInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs22.x
+      CodeUri: lambdas/invoiceToS3
+      MemorySize: 3008
+      Timeout: 30
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref InvoiceBucket
+          TABLE_NAME: !Ref InvoicesTable
+          PROCESSOR_LAMBDA_NAME: !Sub ${InvoiceProcessorFunction.Arn}
       Policies:
         - S3CrudPolicy:
             BucketName: !Ref InvoiceBucket
         - DynamoDBCrudPolicy:
             TableName: !Ref InvoicesTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action: lambda:InvokeFunction
+              Resource: !GetAtt InvoiceProcessorFunction.Arn
       Events:
         UploadInvoice:
           Type: Api
           Properties:
-            RestApiId: !Ref LambdasApi
             Path: /upload-invoice
             Method: POST
-      MemorySize: 3008
-      Timeout: 30
+            RestApiId: !Ref LambdasApi
+            Auth:
+              Authorizer: CognitoAuth
 
-  TextractInvoiceFunction:
+  ProductManagementIntegration:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: lambdas/textractInvoice
       Handler: index.handler
-      Runtime: nodejs22.x
+      Runtime: nodejs18.x
+      CodeUri: lambdas/productManagementIntegration
+      MemorySize: 128
+      Timeout: 10
       Environment:
         Variables:
-          BUCKET_NAME: dallas-ims-invoices
-          TABLE_NAME: !Ref InvoicesTable
+          EPOSNOW_SECRET_NAME: "eposnow-api-token"
+          MASTER_PRODUCTS_TABLE: !Ref MasterProductsTable
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref InvoicesTable
-        - Version: '2012-10-17'
-          Statement:
+            TableName: !Ref MasterProductsTable
+        - Statement:
             - Effect: Allow
               Action:
-                - s3:GetObject
-                - s3:GetObjectTagging
-              Resource: arn:aws:s3:::dallas-ims-invoices/*
-            - Effect: Allow
-              Action:
-                - textract:AnalyzeDocument
-                - textract:DetectDocumentText
-                - textract:AnalyzeExpense # Add this permission
-              Resource: '*'
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - secretsmanager:GetSecretValue
+              Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:eposnow-api-token*
       Events:
-        S3Event:
-          Type: S3
+        ManageProductsAPI:
+          Type: Api
           Properties:
-            Bucket: !Ref InvoiceBucket
-            Events: s3:ObjectCreated:Put
-      MemorySize: 3008
-      Timeout: 60
+            Path: /manage-products
+            Method: POST
+            RestApiId: !Ref LambdasApi
+            Auth:
+              Authorizer: CognitoAuth
 
-
-  InvoiceToInventoryItems:
+  RecordDeliveryFunction:
     Type: AWS::Serverless::Function
     Properties:
       Handler: index.handler
-      Runtime: nodejs22.x
-      CodeUri: lambdas/invoiceToInventory
-      MemorySize: 128
+      Runtime: nodejs18.x
+      CodeUri: lambdas/recordDelivery
+      MemorySize: 256
       Timeout: 15
       Environment:
         Variables:
-          HUGGINGFACE_API_KEY: "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"
-          TABLE_NAME: !Ref InvoicesTable
+          INVOICE_TABLE_NAME: !Ref InvoicesTable
+          EPOSNOW_SECRET_NAME: "eposnow-api-token"
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref InvoicesTable
-        - AWSLambdaBasicExecutionRole
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - secretsmanager:GetSecretValue
+              Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:eposnow-api-token*
+            - Effect: Allow
+              Action:
+                - ssm:GetParameter
+              Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/eposnow-api-token
       Events:
-        TextractProcessedEvent:
-          Type: DynamoDB
+        RecordDeliveryAPI:
+          Type: Api
           Properties:
-            Stream: !GetAtt InvoicesTable.StreamArn
-            BatchSize: 1
-            StartingPosition: LATEST
+            Path: /record-delivery
+            Method: POST
+            RestApiId: !Ref LambdasApi
+            Auth:
+              Authorizer: CognitoAuth
+
+  InvoiceHistoryFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs18.x
+      CodeUri: lambdas/invoiceHistory
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          INVOICE_TABLE_NAME: !Ref InvoicesTable
+          PRODUCT_FUNCTION_NAME: !Ref ProductManagementIntegration
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref InvoicesTable
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ProductManagementIntegration
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+              Resource:
+                - !Sub arn:aws:s3:::${InvoiceBucket}/*
+      Events:
+        InvoiceHistoryAPI:
+          Type: Api
+          Properties:
+            Path: /invoice-history
+            Method: GET
+            RestApiId: !Ref LambdasApi
+            Auth:
+              Authorizer: CognitoAuth
+        PreflightInvoiceHistory:
+          Type: Api
+          Properties:
+            Path: /invoice-history
+            Method: OPTIONS
+            RestApiId: !Ref LambdasApi
+
+  StockTakeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: index.handler
+      Runtime: nodejs18.x
+      CodeUri: lambdas/stockTake
+      MemorySize: 128
+      Timeout: 10
+      Environment:
+        Variables:
+          EPOSNOW_SECRET_NAME: "eposnow-api-token"
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+                - secretsmanager:GetSecretValue
+              Resource: !Sub arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:eposnow-api-token*
+      Events:
+        StockTakeAPI:
+          Type: Api
+          Properties:
+            Path: /stock-take
+            Method: POST
+            RestApiId: !Ref LambdasApi
+            Auth:
+              Authorizer: CognitoAuth
+        PreflightStockTake:
+          Type: Api
+          Properties:
+            Path: /stock-take
+            Method: OPTIONS
+            RestApiId: !Ref LambdasApi
 
 Outputs:
-  ApiUrl:
-    Description: API Gateway URL
-    Value: !Sub https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/upload-invoice
+  InvoiceUploadApiUrl:
+    Description: URL for invoice upload endpoint
+    Value: !Sub "https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/upload-invoice"
+
+  ManageProductsApiUrl:
+    Description: URL for product management endpoint
+    Value: !Sub "https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/manage-products"
+
+  RecordDeliveryApiUrl:
+    Description: URL for delivery submission
+    Value: !Sub "https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/record-delivery"
+
+  StockTakeApiUrl:
+    Description: URL for stock take updates
+    Value: !Sub "https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/stock-take"
+
+  InvoiceHistoryApiUrl:
+    Description: URL for invoice history
+    Value: !Sub "https://${LambdasApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/invoice-history"
 
   InvoiceBucketName:
-    Description: Name of the S3 bucket storing invoice images.
+    Description: Name of the S3 bucket storing invoice images
     Value: !Ref InvoiceBucket
 
-  DynamoDBTableName:
-    Description: Name of the DynamoDB table storing invoice metadata.
+  InvoicesTableName:
+    Description: Name of the DynamoDB table storing invoice metadata
     Value: !Ref InvoicesTable

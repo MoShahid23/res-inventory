@@ -1,10 +1,3 @@
-.new-delivery {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 20px;
-}
-
 .upload-section {
     margin: 20px;
 }
@@ -16,7 +9,90 @@
     background: #333;
 }
 
-input[type="file"] {
+.newDelivery-hiddenFile {
+    display: none;
+}
+
+.newDelivery-buttonContainer {
+    width: 100%;
+    height: inherit;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    justify-self: center;
+    gap: 10px;
+}
+
+.newDelivery-button {
+    width: inherit;
+    height: 50%;
+    margin: auto;
+    font-size: 2rem;
+    cursor: pointer;
+    background-color: white;
+    color: black;
+    align-items: center;
+    align-content: center;
+    justify-content: center;
+    align-self: center;
+    justify-self: center;
+    text-align: center;
+}
+.newDelivery-button .icon {
+    height: 80%;
+    max-width: unset;
+    padding: 0px;
     display: block;
-    margin: 20px auto;
+    margin: auto;
+}
+
+/* If you want to style the “Crop and Send” container/button separately */
+
+
+/* Container that spans the full viewport */
+.cropperPageContainer {
+    display: flex;
+    flex-direction: column;
+    height: 100%; /* Takes up the full vertical space of the browser window */
+    width: 100%; /* Optional if you want it to span the full width */
+    margin: 0;
+    padding: 0;
+    gap: 1%;
+}
+
+.cropper-container {
+    height: 50%;
+}
+/* This will stretch the cropper to fill all remaining space above the button */
+.cropperWrapper {
+    height: 90%;
+    /* If you need a little gap above the button, you can add padding-bottom here */
+}
+
+/* Button area pinned at the bottom */
+.newDelivery-buttonCropWrapper {
+    height: 9%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.newDelivery-buttonCropWrapper button{
+    height: 100%;
+    background: white;
+    color: black;
+}
+
+/* Increase size of crop box handles */
+.cropper-line, /* Edges */
+.cropper-point { /* Corners */
+    width: 16px !important; /* Increase width */
+    height: 16px !important; /* Increase height */
+    background-color: white !important; /* Make them more visible */
+    border: 2px solid black !important; /* Add contrast */
+}
+
+/* Increase active area when dragging */
+.cropper-point {
+    border-radius: 50%; /* Make corner points round */
 }

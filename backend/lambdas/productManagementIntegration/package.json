@@ -1,5 +1,5 @@
 {
-  "name": "textractinvoice",
+  "name": "productmanagementintegration",
   "version": "1.0.0",
   "description": "",
   "license": "ISC",
@@ -10,7 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "aws": "^0.0.3-2",
-    "aws-sdk": "^2.1692.0"
+    "aws-sdk": "^2.1692.0",
+    "axios": "^1.8.4"
   }
 }
